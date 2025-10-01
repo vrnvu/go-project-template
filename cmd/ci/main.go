@@ -25,8 +25,7 @@ func run(args []string) error {
 		buildDocker = flag.Bool("build-docker", false, "Build Docker image")
 		runDocker   = flag.Bool("run-docker", false, "Run Docker image")
 		test        = flag.Bool("test", false, "Run fast tests")
-		testSlow    = flag.Bool("test-slow", false, "Run all tests including slow ones")
-		testCover   = flag.Bool("test-coverage", false, "Run tests with coverage")
+		testSlow    = flag.Bool("test-slow", false, "Run all tests including slow ones with coverage")
 		clean       = flag.Bool("clean", false, "Clean build artifacts")
 		cleanDocker = flag.Bool("clean-docker", false, "Clean Docker image")
 		help        = flag.Bool("help", false, "Show help")
@@ -42,7 +41,7 @@ func run(args []string) error {
 		return nil
 	}
 
-	if !*setup && !*build && !*buildDocker && !*runDocker && !*test && !*testSlow && !*testCover && !*clean && !*cleanDocker {
+	if !*setup && !*build && !*buildDocker && !*runDocker && !*test && !*testSlow && !*clean && !*cleanDocker {
 		flag.Usage()
 		return nil
 	}
@@ -78,11 +77,6 @@ func run(args []string) error {
 	if *testSlow {
 		if err := runTestSlow(ctx); err != nil {
 			return fmt.Errorf("tests failed: %w", err)
-		}
-	}
-	if *testCover {
-		if err := runTestCoverage(ctx); err != nil {
-			return fmt.Errorf("coverage tests failed: %w", err)
 		}
 	}
 	if *clean {
@@ -274,24 +268,15 @@ func runTestSlow(ctx context.Context) error {
 	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-count=1", "-race", "./..."); err != nil {
 		return fmt.Errorf("failed to run tests: %w", err)
 	}
-	return nil
-}
-
-func runTestCoverage(ctx context.Context) error {
-	fmt.Println("Running tests with coverage...")
-	defer fmt.Println("Coverage complete!")
-
-	projectRoot, err := findProjectRoot()
-	if err != nil {
-		return fmt.Errorf("failed to find project root: %w", err)
-	}
 
 	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-covermode=atomic", "-coverprofile=coverage.out", "./..."); err != nil {
 		return fmt.Errorf("failed to run coverage tests: %w", err)
 	}
+
 	if err := runCommandInDir(ctx, projectRoot, "go", "tool", "cover", "-func=coverage.out"); err != nil {
 		return fmt.Errorf("failed to show coverage: %w", err)
 	}
+
 	return nil
 }
 
