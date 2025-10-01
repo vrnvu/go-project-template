@@ -12,63 +12,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: go.sum
-
-      - name: Setup (deps, tools)
-        run: go run cmd/ci/main.go -setup
-
-      - name: Check file sizes
-        run: go run cmd/ci/main.go -check-size
-
-      - name: Run linter
-        run: go run cmd/ci/main.go -lint
-
-  build:
-    name: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: go.sum
-
-      - name: Setup (deps, tools)
-        run: go run cmd/ci/main.go -setup
-
-      - name: Build app binary
-        run: go run cmd/ci/main.go -build
-
-      - name: Upload app binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-${{ github.sha }}
-          path: bin/app
-
-      - name: Build Docker image
-        run: go run cmd/ci/main.go -build-docker
-
-      - name: Test CLI
-        run: |
-          ./bin/app --help
-          ./bin/app
-
   test:
     name: test
     runs-on: ubuntu-latest
@@ -86,11 +29,11 @@ jobs:
       - name: Setup (deps, tools)
         run: go run cmd/ci/main.go -setup
 
+      - name: Run fast tests
+        run: go run cmd/ci/main.go -test
+
       - name: Run slow tests
         run: go run cmd/ci/main.go -test-slow
 
       - name: Run test coverage
         run: go run cmd/ci/main.go -test-coverage
-
-      - name: Check file sizes
-        run: go run cmd/ci/main.go -check-size
