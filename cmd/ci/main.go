@@ -263,6 +263,14 @@ func runTestSlow(ctx context.Context) error {
 		return fmt.Errorf("failed to find project root: %w", err)
 	}
 
+	if err := runLint(ctx); err != nil {
+		return fmt.Errorf("linting failed: %w", err)
+	}
+
+	if err := runCheckSize(ctx); err != nil {
+		return fmt.Errorf("size check failed: %w", err)
+	}
+
 	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-count=1", "-race", "./..."); err != nil {
 		return fmt.Errorf("failed to run tests: %w", err)
 	}
