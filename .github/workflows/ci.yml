@@ -29,11 +29,5 @@ jobs:
       - name: Setup (deps, tools)
         run: go run cmd/ci/main.go -setup
 
-      - name: Run fast tests
-        run: go run cmd/ci/main.go -test
-
-      - name: Run slow tests
+      - name: Run all tests with coverage
         run: go run cmd/ci/main.go -test-slow
-
-      - name: Run test coverage
-        run: go run cmd/ci/main.go -test-coverage
