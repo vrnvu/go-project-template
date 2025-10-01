@@ -37,20 +37,19 @@ func (c *CountCB) Call(f func() error) Result {
 		asserts(c.halfOpenAttempts == 0)
 
 		if err := f(); err != nil {
-			c.closedFailures += 1
+			c.closedFailures++
 			if c.closedFailures == c.closedFailuresThreshold {
 				c.state = Open
 			}
 			return Failed
-		} else {
-			c.closedFailures = 0
-			return Succeeded
 		}
+		c.closedFailures = 0
+		return Succeeded
 	case Open:
 		asserts(c.closedFailures == c.closedFailuresThreshold)
 		asserts(c.halfOpenAttempts < c.halfOpenThreshold)
 
-		c.halfOpenAttempts += 1
+		c.halfOpenAttempts++
 		if c.halfOpenAttempts == c.halfOpenThreshold {
 			c.state = HalfOpen
 			c.halfOpenAttempts = 0
@@ -64,11 +63,10 @@ func (c *CountCB) Call(f func() error) Result {
 			c.state = Open
 			c.halfOpenAttempts = 0
 			return Failed
-		} else {
-			c.state = Closed
-			c.closedFailures = 0
-			return Succeeded
 		}
+		c.state = Closed
+		c.closedFailures = 0
+		return Succeeded
 	default:
 		panic("unreachable")
 	}

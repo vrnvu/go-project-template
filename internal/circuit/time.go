@@ -59,17 +59,16 @@ func (c *TimeCB) Call(f func() error) Result {
 		asserts(c.openAt == nil)
 
 		if err := f(); err != nil {
-			c.closedFailures += 1
+			c.closedFailures++
 			if c.closedFailures == c.closedFailuresThreshold {
 				c.state = Open
 				now := c.clock.Now()
 				c.openAt = &now
 			}
 			return Failed
-		} else {
-			c.closedFailures = 0
-			return Succeeded
 		}
+		c.closedFailures = 0
+		return Succeeded
 	case Open:
 		asserts(c.closedFailures == c.closedFailuresThreshold)
 		asserts(c.halfOpenProbes == 0)
@@ -81,7 +80,7 @@ func (c *TimeCB) Call(f func() error) Result {
 			c.halfOpenProbes = 0
 
 			if err := f(); err != nil {
-				c.halfOpenProbes += 1
+				c.halfOpenProbes++
 				if c.halfOpenProbes == c.halfOpenProbesThreshold {
 					c.state = Open
 					c.halfOpenProbes = 0
@@ -89,16 +88,14 @@ func (c *TimeCB) Call(f func() error) Result {
 					c.openAt = &now
 				}
 				return Failed
-			} else {
-				c.state = Closed
-				c.closedFailures = 0
-				c.openAt = nil
-				c.halfOpenProbes = 0
-				return Succeeded
 			}
-		} else {
-			return Rejected
+			c.state = Closed
+			c.closedFailures = 0
+			c.openAt = nil
+			c.halfOpenProbes = 0
+			return Succeeded
 		}
+		return Rejected
 	case HalfOpen:
 		asserts(c.closedFailures == c.closedFailuresThreshold)
 		asserts(c.halfOpenProbes < c.halfOpenProbesThreshold)
@@ -107,7 +104,7 @@ func (c *TimeCB) Call(f func() error) Result {
 		asserts(c.clock.Now().After(openAtValue.Add(c.openTimeout)))
 
 		if err := f(); err != nil {
-			c.halfOpenProbes += 1
+			c.halfOpenProbes++
 			if c.halfOpenProbes == c.halfOpenProbesThreshold {
 				c.state = Open
 				c.halfOpenProbes = 0
@@ -115,13 +112,12 @@ func (c *TimeCB) Call(f func() error) Result {
 				c.openAt = &now
 			}
 			return Failed
-		} else {
-			c.state = Closed
-			c.closedFailures = 0
-			c.openAt = nil
-			c.halfOpenProbes = 0
-			return Succeeded
 		}
+		c.state = Closed
+		c.closedFailures = 0
+		c.openAt = nil
+		c.halfOpenProbes = 0
+		return Succeeded
 	default:
 		panic("unreachable")
 	}

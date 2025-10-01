@@ -7,6 +7,7 @@ import (
 )
 
 func TestAsserts(t *testing.T) {
+	t.Parallel()
 	asserts(true)
 
 	assert.Panics(t, func() {
