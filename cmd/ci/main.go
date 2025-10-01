@@ -17,7 +17,6 @@ func main() {
 	}
 }
 
-// run executes the CI tool with the given arguments
 func run(args []string) error {
 	var (
 		setup       = flag.Bool("setup", false, "Setup development environment")
