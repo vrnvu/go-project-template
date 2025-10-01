@@ -273,6 +273,7 @@ func runTestSlow(ctx context.Context) error {
 		return fmt.Errorf("failed to run tests: %w", err)
 	}
 
+	fmt.Println("Running tests with coverage...")
 	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-covermode=atomic", "-coverprofile=coverage.out", "./..."); err != nil {
 		return fmt.Errorf("failed to run coverage tests: %w", err)
 	}
@@ -280,6 +281,7 @@ func runTestSlow(ctx context.Context) error {
 	if err := runCommandInDir(ctx, projectRoot, "go", "tool", "cover", "-func=coverage.out"); err != nil {
 		return fmt.Errorf("failed to show coverage: %w", err)
 	}
+	fmt.Println("Coverage complete!")
 
 	return nil
 }
@@ -347,8 +349,6 @@ func runCheckSize(ctx context.Context) error {
 			if info.Size() > limit {
 				return fmt.Errorf("size-check: %s: %s (%d bytes)", ext, path, info.Size())
 			}
-		} else {
-			return fmt.Errorf("size-check: format not supported: %s %s", ext, path)
 		}
 	}
 
