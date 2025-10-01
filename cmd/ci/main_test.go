@@ -95,15 +95,15 @@ func TestRunWithInvalidFlag(t *testing.T) { //nolint:paralleltest
 	assertOutputContains(t, got, want)
 }
 
-func TestRunWithTestCoverage(t *testing.T) { //nolint:paralleltest
+func TestRunWithTestSlow(t *testing.T) { //nolint:paralleltest
 	if testing.Short() {
-		t.Skip("slow/integration: coverage")
+		t.Skip("slow/integration: test-slow")
 	}
 	if testing.CoverMode() != "" {
 		t.Skip("Skipping coverage test when running with coverage")
 	}
 
-	stdout, stderr, err := captureOutput("test-coverage")
+	stdout, stderr, err := captureOutput("test-slow")
 
 	got := formatOutputGot(stdout, stderr, err)
 	// The actual output includes coverage details, so we just check it contains the key messages
