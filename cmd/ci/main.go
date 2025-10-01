@@ -164,7 +164,7 @@ func runSetup(ctx context.Context) error {
 
 	gobin := filepath.Join(strings.TrimSpace(string(gopath)), "bin", "golangci-lint")
 	if _, err := os.Stat(gobin); os.IsNotExist(err) {
-		if err := runCommand(ctx, "go", "install", "github.com/golangci/golangci-lint/cmd/golangci-lint@v2.50.0"); err != nil {
+		if err := runCommand(ctx, "go", "install", "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.60.1"); err != nil {
 			return fmt.Errorf("failed to install golangci-lint: %w", err)
 		}
 	} else {
