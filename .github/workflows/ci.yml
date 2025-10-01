@@ -12,39 +12,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  setup:
-    name: setup
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.23.4"
-          cache: true
-          cache-dependency-path: go.sum
-
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
-      - name: Cache Go dependencies and tools
-        id: cache-deps
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-            ~/go/bin/golangci-lint
-          key: ${{ runner.os }}-go-deps-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-deps-
-
   lint:
     name: lint
     runs-on: ubuntu-latest
-    needs: setup
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -55,23 +25,6 @@ jobs:
           go-version: "1.23.4"
           cache: true
           cache-dependency-path: go.sum
-
-      - name: Restore Go dependencies and tools
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-            ~/go/bin/golangci-lint
-          key: ${{ runner.os }}-go-deps-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-deps-
-
-      - name: Install golangci-lint (if not cached)
-        run: |
-          if ! command -v golangci-lint &> /dev/null; then
-              go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          fi
 
       - name: Run linter
         run: go run cmd/ci/main.go -lint
@@ -79,7 +32,6 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
-    needs: setup
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -90,17 +42,6 @@ jobs:
           go-version: "1.23.4"
           cache: true
           cache-dependency-path: go.sum
-
-      - name: Restore Go dependencies and tools
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-            ~/go/bin/golangci-lint
-          key: ${{ runner.os }}-go-deps-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-deps-
 
       - name: Build
         run: go run cmd/ci/main.go -build
@@ -113,7 +54,6 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    needs: setup
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -124,23 +64,6 @@ jobs:
           go-version: "1.23.4"
           cache: true
           cache-dependency-path: go.sum
-
-      - name: Restore Go dependencies and tools
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-            ~/go/bin/golangci-lint
-          key: ${{ runner.os }}-go-deps-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-deps-
-
-      - name: Install golangci-lint (if not cached)
-        run: |
-          if ! command -v golangci-lint &> /dev/null; then
-              go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          fi
 
       - name: Run fast tests
         run: go run cmd/ci/main.go -test
