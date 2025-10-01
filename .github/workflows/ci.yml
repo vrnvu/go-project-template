@@ -42,7 +42,7 @@ jobs:
       - name: Upload setup artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ jobs.setup.outputs.artifact-name }}
+          name: setup-${{ github.run_id }}
           path: .cache-bundle
 
   lint:
@@ -106,8 +106,17 @@ jobs:
           mkdir -p $(go env GOPATH)/bin
           tar -xzf .cache-bundle/gobin.tgz -C $(go env GOPATH)/bin || true
 
-      - name: Build
+      - name: Build app binary
         run: go run cmd/ci/main.go -build
+
+      - name: Upload app binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ github.sha }}
+          path: bin/app
+
+      - name: Build Docker image
+        run: go run cmd/ci/main.go -build-docker
 
       - name: Test CLI
         run: |
