@@ -1,0 +1,81 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+    workflow_dispatch:
+
+concurrency:
+    group: "${{ github.workflow }}-${{ github.head_ref || github.ref }}"
+    cancel-in-progress: true
+
+jobs:
+    lint:
+        name: lint
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: "1.23.4"
+                  cache: true
+                  cache-dependency-path: go.sum
+
+            - name: Install golangci-lint
+              run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+            - name: Run linter
+              run: go run cmd/ci/main.go -lint
+
+    build:
+        name: build
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: "1.23.4"
+                  cache: true
+                  cache-dependency-path: go.sum
+
+            - name: Build
+              run: go run cmd/ci/main.go -build
+
+            - name: Test CLI
+              run: |
+                  ./bin/app --help
+                  ./bin/app
+
+    test:
+        name: test
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: "1.23.4"
+                  cache: true
+                  cache-dependency-path: go.sum
+
+            - name: Run fast tests
+              run: go run cmd/ci/main.go -test
+
+            - name: Run slow tests
+              run: go run cmd/ci/main.go -test-slow
+
+            - name: Run test coverage
+              run: go run cmd/ci/main.go -test-coverage
+
+            - name: Check file sizes
+              run: go run cmd/ci/main.go -check-size
