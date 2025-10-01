@@ -269,12 +269,8 @@ func runTestSlow(ctx context.Context) error {
 		return fmt.Errorf("size check failed: %w", err)
 	}
 
-	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-count=1", "-race", "./..."); err != nil {
-		return fmt.Errorf("failed to run tests: %w", err)
-	}
-
 	fmt.Println("Running tests with coverage...")
-	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-covermode=atomic", "-coverprofile=coverage.out", "./..."); err != nil {
+	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-count=1", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./..."); err != nil {
 		return fmt.Errorf("failed to run coverage tests: %w", err)
 	}
 
