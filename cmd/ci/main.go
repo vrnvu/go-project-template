@@ -162,6 +162,10 @@ func runSetup(ctx context.Context) error {
 		return fmt.Errorf("failed to get GOPATH: %w", err)
 	}
 
+	if err := runCommand(ctx, "curl", "--version"); err != nil {
+		return fmt.Errorf("curl is required but not available: %w", err)
+	}
+
 	gobin := filepath.Join(strings.TrimSpace(string(gopath)), "bin", "golangci-lint")
 	if _, err := os.Stat(gobin); os.IsNotExist(err) {
 		binDir := filepath.Dir(gobin)
