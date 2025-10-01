@@ -31,9 +31,13 @@ func run(args []string) error {
 		help        = flag.Bool("help", false, "Show help")
 	)
 
-	// Parse flags from the provided args
 	if err := flag.CommandLine.Parse(args); err != nil {
 		return fmt.Errorf("failed to parse flags: %w", err)
+	}
+
+	if len(args) > 1 {
+		flag.Usage()
+		return fmt.Errorf("too many arguments: %v", args)
 	}
 
 	if *help {
