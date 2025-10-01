@@ -148,6 +148,7 @@ func checkCoverageThreshold(t *testing.T, output string) {
 		"main.go, runCheckSize",
 		"main.go, checkFileSizes",
 		"main.go, runClean",
+		"main.go, runCleanDocker",
 		"main.go, runSetup",
 		"main.go, runTestFast",
 		"main.go, runTestSlow",
