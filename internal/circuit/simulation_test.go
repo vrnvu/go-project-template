@@ -3,6 +3,7 @@ package circuit
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -38,6 +39,28 @@ func generateRandomStepsCount(t *testing.T, seed int64, count int) []StepCount {
 	return steps
 }
 
+func generateRandomStepsTime(t *testing.T, seed int64, count int) []StepTime {
+	t.Helper()
+
+	steps := make([]StepTime, 0, count)
+	r := rand.New(rand.NewSource(seed)) //nolint:gosec
+	for range count {
+		v := r.Intn(3)
+		switch v {
+		case 2:
+			steps = append(steps, TimeSuccess)
+		case 1:
+			steps = append(steps, TimeFailure)
+		case 0:
+			steps = append(steps, TimeTick)
+		default:
+			panic("unreachable")
+		}
+	}
+
+	return steps
+}
+
 func TestCountCBRandomeSequence(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -64,6 +87,43 @@ func TestCountCBRandomeSequence(t *testing.T) {
 			assert.NotPanics(t, func() {
 				_ = cb.Call(Error(t))
 			})
+		default:
+			panic("unreachable")
+		}
+	}
+}
+
+func TestTimeCBRandomeSequence(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("slow/integration: time sim")
+	}
+
+	openTimeout := 5 * time.Millisecond
+	halfOpenProbesThreshold := 5
+	closedFailuresThreshold := 10
+	seed := int64(42)
+	count := 100_000
+	steps := generateRandomStepsTime(t, seed, count)
+	start := time.Now()
+	clock := NewTestClock(start, 1*time.Millisecond)
+
+	cb, err := NewTimeCB(clock, openTimeout, uint8(halfOpenProbesThreshold), uint8(closedFailuresThreshold))
+	assert.NotNil(t, cb)
+	assert.NoError(t, err)
+
+	for _, step := range steps {
+		switch step {
+		case TimeSuccess:
+			assert.NotPanics(t, func() {
+				_ = cb.Call(Ok(t))
+			})
+		case TimeFailure:
+			assert.NotPanics(t, func() {
+				_ = cb.Call(Error(t))
+			})
+		case TimeTick:
+			clock.Tick()
 		default:
 			panic("unreachable")
 		}

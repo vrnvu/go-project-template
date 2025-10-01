@@ -8,7 +8,12 @@ import (
 )
 
 type TestClock struct {
-	now time.Time
+	now        time.Time
+	tickAmount time.Duration
+}
+
+func NewTestClock(now time.Time, tickAmount time.Duration) *TestClock {
+	return &TestClock{now: now, tickAmount: tickAmount}
 }
 
 func (c *TestClock) Now() time.Time {
@@ -16,25 +21,25 @@ func (c *TestClock) Now() time.Time {
 }
 
 func (c *TestClock) Tick() {
-	c.now = c.now.Add(2 * time.Millisecond)
+	c.now = c.now.Add(c.tickAmount)
 }
 
 func TestNewTimeCBInvalid(t *testing.T) {
 	t.Parallel()
 
-	c, err := NewTimeCB(&TestClock{}, 0*time.Second, 1, 1)
+	c, err := NewTimeCB(NewTestClock(time.Now(), time.Millisecond), 0*time.Second, 1, 1)
 	assert.Nil(t, c)
 	assert.ErrorContains(t, err, "openTimeout")
 
-	c, err = NewTimeCB(&TestClock{}, 1*time.Second, 0, 1)
+	c, err = NewTimeCB(NewTestClock(time.Now(), time.Millisecond), 1*time.Second, 0, 1)
 	assert.Nil(t, c)
 	assert.ErrorContains(t, err, "halfOpenProbesThreshold")
 
-	c, err = NewTimeCB(&TestClock{}, 1*time.Second, 1, 0)
+	c, err = NewTimeCB(NewTestClock(time.Now(), time.Millisecond), 1*time.Second, 1, 0)
 	assert.Nil(t, c)
 	assert.ErrorContains(t, err, "closedFailuresThreshold")
 
-	c, err = NewTimeCB(&TestClock{}, 6*time.Second, 1, 1)
+	c, err = NewTimeCB(NewTestClock(time.Now(), time.Millisecond), 6*time.Second, 1, 1)
 	assert.Nil(t, c)
 	assert.ErrorContains(t, err, "openTimeout")
 }
@@ -43,7 +48,7 @@ func TestTimeClosedSuccess(t *testing.T) {
 	t.Parallel()
 
 	start := time.Now()
-	clock := &TestClock{now: start}
+	clock := NewTestClock(start, 2*time.Millisecond)
 	openTimeout := time.Millisecond
 	halfOpenProbesThreshold := uint8(1)
 	closedFailuresThreshold := uint8(2)
@@ -61,7 +66,7 @@ func TestTimeClosedFailureStaysClosed(t *testing.T) {
 	t.Parallel()
 
 	start := time.Now()
-	clock := &TestClock{now: start}
+	clock := NewTestClock(start, 2*time.Millisecond)
 	openTimeout := time.Millisecond
 	halfOpenProbesThreshold := uint8(1)
 	closedFailuresThreshold := uint8(2)
@@ -79,7 +84,7 @@ func TestTimeClosedToOpen(t *testing.T) {
 	t.Parallel()
 
 	start := time.Now()
-	clock := &TestClock{now: start}
+	clock := NewTestClock(start, 2*time.Millisecond)
 	openTimeout := time.Millisecond
 	halfOpenProbesThreshold := uint8(1)
 	closedFailuresThreshold := uint8(2)
@@ -101,7 +106,7 @@ func TestTimeOpenRejectsCallsImmediately(t *testing.T) {
 	t.Parallel()
 
 	start := time.Now()
-	clock := &TestClock{now: start}
+	clock := NewTestClock(start, 2*time.Millisecond)
 	openTimeout := time.Millisecond
 	halfOpenProbesThreshold := uint8(1)
 	closedFailuresThreshold := uint8(2)
@@ -127,7 +132,7 @@ func TestTimeOpenRejectsUntilTimeoutThenAllowsHalfOpenCall(t *testing.T) {
 	t.Parallel()
 
 	start := time.Now()
-	clock := &TestClock{now: start}
+	clock := NewTestClock(start, 2*time.Millisecond)
 	openTimeout := time.Millisecond
 	halfOpenProbesThreshold := uint8(1)
 	closedFailuresThreshold := uint8(2)
@@ -161,7 +166,7 @@ func TestTimeHalfOpenSuccessClosesBreaker(t *testing.T) {
 	t.Parallel()
 
 	start := time.Now()
-	clock := &TestClock{now: start}
+	clock := NewTestClock(start, 2*time.Millisecond)
 	openTimeout := time.Millisecond
 	halfOpenProbesThreshold := uint8(1)
 	closedFailuresThreshold := uint8(2)
@@ -195,7 +200,7 @@ func TestTimeHalfOpenFailureOpensBreaker(t *testing.T) {
 	t.Parallel()
 
 	start := time.Now()
-	clock := &TestClock{now: start}
+	clock := NewTestClock(start, 2*time.Millisecond)
 	openTimeout := time.Millisecond
 	halfOpenProbesThreshold := uint8(1)
 	closedFailuresThreshold := uint8(2)
@@ -225,7 +230,7 @@ func TestTimeHalfOpenRespectsProbesThreshold(t *testing.T) {
 	t.Parallel()
 
 	start := time.Now()
-	clock := &TestClock{now: start}
+	clock := NewTestClock(start, 2*time.Millisecond)
 	halfOpenProbesThreshold := uint8(2)
 	closedFailuresThreshold := uint8(2)
 
