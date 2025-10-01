@@ -13,7 +13,8 @@ import (
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fatalf("%v", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
 	}
 }
 
@@ -34,7 +35,7 @@ func run(args []string) error {
 		return fmt.Errorf("failed to parse flags: %w", err)
 	}
 
-	if len(args) > 1 {
+	if len(args) != 1 {
 		flag.Usage()
 		return fmt.Errorf("too many arguments: %v", args)
 	}
@@ -396,9 +397,4 @@ func runCleanDocker(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func fatalf(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
-	os.Exit(1)
 }
