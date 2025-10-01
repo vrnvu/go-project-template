@@ -133,34 +133,43 @@ func checkCoverageThreshold(t *testing.T, output string) {
 
 	var failures []string
 	whiteList := []string{
-		"main",
-		"run",
-		"runBuild",
-		"runCheckSize",
-		"checkFileSizes",
-		"runClean",
-		"runSetup",
-		"runTestFast",
-		"runTestSlow",
-		"runTestCoverage",
-		"fatalf",
+		"main.go, main",
+		"main.go, run",
+		"main.go, runBuild",
+		"main.go, runCheckSize",
+		"main.go, checkFileSizes",
+		"main.go, runClean",
+		"main.go, runSetup",
+		"main.go, runTestFast",
+		"main.go, runTestSlow",
+		"main.go, runTestCoverage",
+		"main.go, fatalf",
+		"time.go, Now",
 	}
 
 	// Check for function-level coverage lines like:
 	// "github.com/vrnvu/gdts/cmd/ci/main.go:21:                        run             55.6%"
 	// Pattern: file:line: tabs function tabs percentage%
-	functionRegex := regexp.MustCompile(`\S+:\d+:\s+(\S+)\s+(\d+\.\d+)%`)
+	functionRegex := regexp.MustCompile(`(\S+):\d+:\s+(\S+)\s+(\d+\.\d+)%`)
 	functionMatches := functionRegex.FindAllStringSubmatch(output, -1)
 
 	for _, match := range functionMatches {
-		funcName := match[1]
-		percentage, err := strconv.ParseFloat(match[2], 64)
+		fileName := match[1]
+		funcName := match[2]
+		percentage, err := strconv.ParseFloat(match[3], 64)
 		if err != nil {
 			t.Errorf("Failed to parse function coverage percentage: %v", err)
 			continue
 		}
 
-		if slices.Contains(whiteList, funcName) {
+		// Extract just the filename from the full path
+		fileParts := strings.Split(fileName, "/")
+		shortFileName := fileParts[len(fileParts)-1]
+
+		// Create the whitelist key in format "filename, functionname"
+		whitelistKey := fmt.Sprintf("%s, %s", shortFileName, funcName)
+
+		if slices.Contains(whiteList, whitelistKey) {
 			continue
 		}
 

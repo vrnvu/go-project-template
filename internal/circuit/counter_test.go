@@ -7,6 +7,7 @@ import (
 )
 
 func TestNewInvalidCircuitBreaker(t *testing.T) {
+	t.Parallel()
 	c, err := NewCountCB(0, 1)
 	assert.Nil(t, c)
 	assert.ErrorContains(t, err, "failureThreshold")
@@ -17,6 +18,7 @@ func TestNewInvalidCircuitBreaker(t *testing.T) {
 }
 
 func TestNewvalidCircuitBreakerIsClosed(t *testing.T) {
+	t.Parallel()
 	c, err := NewCountCB(2, 1)
 	assert.NotNil(t, c)
 	assert.NoError(t, err)
@@ -24,6 +26,7 @@ func TestNewvalidCircuitBreakerIsClosed(t *testing.T) {
 }
 
 func TestClosedSuccess(t *testing.T) {
+	t.Parallel()
 	c, err := NewCountCB(2, 1)
 	assert.NotNil(t, c)
 	assert.NoError(t, err)
@@ -35,6 +38,7 @@ func TestClosedSuccess(t *testing.T) {
 }
 
 func TestClosedFailureStaysClosed(t *testing.T) {
+	t.Parallel()
 	c, err := NewCountCB(2, 1)
 	assert.NotNil(t, c)
 	assert.NoError(t, err)
@@ -46,6 +50,7 @@ func TestClosedFailureStaysClosed(t *testing.T) {
 }
 
 func TestClosedToOpen(t *testing.T) {
+	t.Parallel()
 	c, err := NewCountCB(2, 1)
 	assert.NotNil(t, c)
 	assert.NoError(t, err)
@@ -61,6 +66,7 @@ func TestClosedToOpen(t *testing.T) {
 }
 
 func TestOpenRejectsCalls(t *testing.T) {
+	t.Parallel()
 	c, err := NewCountCB(2, 2)
 	assert.NotNil(t, c)
 	assert.NoError(t, err)
@@ -80,6 +86,7 @@ func TestOpenRejectsCalls(t *testing.T) {
 }
 
 func TestOpenToHalfOpen(t *testing.T) {
+	t.Parallel()
 	c, err := NewCountCB(2, 1)
 	assert.NotNil(t, c)
 	assert.NoError(t, err)
@@ -99,6 +106,7 @@ func TestOpenToHalfOpen(t *testing.T) {
 }
 
 func TestHalfOpenSuccessToClosed(t *testing.T) {
+	t.Parallel()
 	c, err := NewCountCB(2, 1)
 	assert.NotNil(t, c)
 	assert.NoError(t, err)
@@ -122,6 +130,7 @@ func TestHalfOpenSuccessToClosed(t *testing.T) {
 }
 
 func TestHalfOpenFailureOpen(t *testing.T) {
+	t.Parallel()
 	c, err := NewCountCB(2, 1)
 	assert.NotNil(t, c)
 	assert.NoError(t, err)
