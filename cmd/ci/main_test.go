@@ -67,6 +67,9 @@ func captureOutput(flagName string) (string, string, error) {
 }
 
 func TestRunWithLint(t *testing.T) { //nolint:paralleltest
+	if testing.Short() {
+		t.Skip("slow/integration: lint")
+	}
 	stdout, stderr, err := captureOutput("lint")
 
 	got := formatOutputGot(stdout, stderr, err)
@@ -76,6 +79,9 @@ func TestRunWithLint(t *testing.T) { //nolint:paralleltest
 }
 
 func TestRunWithBuild(t *testing.T) { //nolint:paralleltest
+	if testing.Short() {
+		t.Skip("slow/integration: build")
+	}
 	stdout, stderr, err := captureOutput("build")
 
 	got := formatOutputGot(stdout, stderr, err)
@@ -110,6 +116,9 @@ func TestRunWithCheckSize(t *testing.T) { //nolint:paralleltest
 }
 
 func TestRunWithTestCoverage(t *testing.T) { //nolint:paralleltest
+	if testing.Short() {
+		t.Skip("slow/integration: coverage")
+	}
 	if testing.CoverMode() != "" {
 		t.Skip("Skipping coverage test when running with coverage")
 	}
@@ -174,16 +183,19 @@ func checkCoverageThreshold(t *testing.T, output string) {
 		}
 
 		if percentage < 70.0 {
-			failures = append(failures, fmt.Sprintf("Function %s: %.1f%% (below 80%%)", funcName, percentage))
+			failures = append(failures, fmt.Sprintf("Function %s: %.1f%% (below 70%%)", funcName, percentage))
 		}
 	}
 
 	if len(failures) > 0 {
-		t.Errorf("Coverage below 80%% threshold:\n%s", strings.Join(failures, "\n"))
+		t.Errorf("Coverage below 70%% threshold:\n%s", strings.Join(failures, "\n"))
 	}
 }
 
 func TestRunWithBuildDocker(t *testing.T) { //nolint:paralleltest
+	if testing.Short() {
+		t.Skip("slow/integration: docker")
+	}
 	stdout, stderr, err := captureOutput("build-docker")
 
 	got := formatOutputGot(stdout, stderr, err)
