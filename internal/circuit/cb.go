@@ -1,5 +1,10 @@
 package circuit
 
+import (
+	"errors"
+	"testing"
+)
+
 type State int
 
 const (
@@ -19,5 +24,19 @@ const (
 func asserts(condition bool) {
 	if !condition {
 		panic("assertion failed")
+	}
+}
+
+func Ok(t *testing.T) func() error {
+	t.Helper()
+	return func() error {
+		return nil
+	}
+}
+
+func Error(t *testing.T) func() error {
+	t.Helper()
+	return func() error {
+		return errors.New("error")
 	}
 }

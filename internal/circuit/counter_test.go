@@ -1,25 +1,10 @@
 package circuit
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-func Ok(t *testing.T) func() error {
-	t.Helper()
-	return func() error {
-		return nil
-	}
-}
-
-func Error(t *testing.T) func() error {
-	t.Helper()
-	return func() error {
-		return errors.New("error")
-	}
-}
 
 func TestNewInvalidCircuitBreaker(t *testing.T) {
 	c, err := NewCountCB(0, 1)
