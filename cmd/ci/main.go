@@ -27,8 +27,6 @@ func run(args []string) error {
 		test        = flag.Bool("test", false, "Run fast tests")
 		testSlow    = flag.Bool("test-slow", false, "Run all tests including slow ones")
 		testCover   = flag.Bool("test-coverage", false, "Run tests with coverage")
-		lint        = flag.Bool("lint", false, "Run linter")
-		checkSize   = flag.Bool("check-size", false, "Check file sizes")
 		clean       = flag.Bool("clean", false, "Clean build artifacts")
 		cleanDocker = flag.Bool("clean-docker", false, "Clean Docker image")
 		help        = flag.Bool("help", false, "Show help")
@@ -44,7 +42,7 @@ func run(args []string) error {
 		return nil
 	}
 
-	if !*setup && !*build && !*buildDocker && !*runDocker && !*test && !*testSlow && !*testCover && !*lint && !*checkSize && !*clean && !*cleanDocker {
+	if !*setup && !*build && !*buildDocker && !*runDocker && !*test && !*testSlow && !*testCover && !*clean && !*cleanDocker {
 		flag.Usage()
 		return nil
 	}
@@ -85,16 +83,6 @@ func run(args []string) error {
 	if *testCover {
 		if err := runTestCoverage(ctx); err != nil {
 			return fmt.Errorf("coverage tests failed: %w", err)
-		}
-	}
-	if *lint {
-		if err := runLint(ctx); err != nil {
-			return fmt.Errorf("linting failed: %w", err)
-		}
-	}
-	if *checkSize {
-		if err := runCheckSize(ctx); err != nil {
-			return fmt.Errorf("size check failed: %w", err)
 		}
 	}
 	if *clean {
@@ -251,9 +239,18 @@ func runTestFast(ctx context.Context) error {
 		return fmt.Errorf("failed to find project root: %w", err)
 	}
 
+	if err := runLint(ctx); err != nil {
+		return fmt.Errorf("linting failed: %w", err)
+	}
+
+	if err := runCheckSize(ctx); err != nil {
+		return fmt.Errorf("size check failed: %w", err)
+	}
+
 	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-count=1", "-race", "-short", "./..."); err != nil {
 		return fmt.Errorf("failed to run fast tests: %w", err)
 	}
+
 	return nil
 }
 

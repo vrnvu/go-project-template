@@ -66,18 +66,6 @@ func captureOutput(flagName string) (string, string, error) {
 	return stdout.String(), stderr.String(), err
 }
 
-func TestRunWithLint(t *testing.T) { //nolint:paralleltest
-	if testing.Short() {
-		t.Skip("slow/integration: lint")
-	}
-	stdout, stderr, err := captureOutput("lint")
-
-	got := formatOutputGot(stdout, stderr, err)
-	want := formatOutputWant("Running linter...\nLinting complete!\n", "", nil)
-
-	assertOutput(t, got, want)
-}
-
 func TestRunWithBuild(t *testing.T) { //nolint:paralleltest
 	if testing.Short() {
 		t.Skip("slow/integration: build")
@@ -105,14 +93,6 @@ func TestRunWithInvalidFlag(t *testing.T) { //nolint:paralleltest
 	got := formatOutputGot(stdout, stderr, err)
 	want := "flag provided but not defined: -invalid"
 	assertOutputContains(t, got, want)
-}
-
-func TestRunWithCheckSize(t *testing.T) { //nolint:paralleltest
-	stdout, stderr, err := captureOutput("check-size")
-
-	got := formatOutputGot(stdout, stderr, err)
-	want := formatOutputWant("Checking file sizes...\nFile sizes checked!\n", "", nil)
-	assertOutput(t, got, want)
 }
 
 func TestRunWithTestCoverage(t *testing.T) { //nolint:paralleltest
