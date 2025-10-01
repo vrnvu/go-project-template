@@ -13,7 +13,7 @@ import (
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fatalf("Error: %v", err)
+		fatalf("%v", err)
 	}
 }
 
@@ -164,11 +164,18 @@ func runSetup(ctx context.Context) error {
 
 	gobin := filepath.Join(strings.TrimSpace(string(gopath)), "bin", "golangci-lint")
 	if _, err := os.Stat(gobin); os.IsNotExist(err) {
-		if err := runCommand(ctx, "go", "install", "github.com/golangci/golangci-lint/cmd/golangci-lint@latest"); err != nil {
+		if err := runCommand(ctx, "go", "install", "github.com/golangci/golangci-lint/cmd/golangci-lint@v2.50.0"); err != nil {
 			return fmt.Errorf("failed to install golangci-lint: %w", err)
 		}
 	} else {
 		fmt.Println("golangci-lint already installed")
+	}
+
+	if err := runCommand(ctx, "git", "--version"); err != nil {
+		return fmt.Errorf("git is required but not available: %w", err)
+	}
+	if err := runCommand(ctx, "git", "rev-parse", "--is-inside-work-tree"); err != nil {
+		return fmt.Errorf("not a git repository: %w", err)
 	}
 
 	return nil
@@ -210,7 +217,7 @@ func runBuildDocker(ctx context.Context) error {
 		return fmt.Errorf("failed to find project root: %w", err)
 	}
 
-	if err := runCommandInDir(ctx, projectRoot, "docker", "build", "-t", "app", "."); err != nil {
+	if err := runCommandInDir(ctx, projectRoot, "docker", "build", "--platform", "linux/amd64", "-t", "app:latest", "."); err != nil {
 		return fmt.Errorf("failed to build Docker image: %w", err)
 	}
 
@@ -221,7 +228,7 @@ func runRunDocker(ctx context.Context) error {
 	fmt.Println("Running Docker image...")
 	defer fmt.Println("Docker run complete!")
 
-	if err := runCommand(ctx, "docker", "run", "app"); err != nil {
+	if err := runCommand(ctx, "docker", "run", "--rm", "app:latest"); err != nil {
 		return fmt.Errorf("failed to run Docker image: %w", err)
 	}
 
@@ -238,7 +245,7 @@ func runTestFast(ctx context.Context) error {
 		return fmt.Errorf("failed to find project root: %w", err)
 	}
 
-	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-count=1", "-race", "-short", "./internal/...", "./cmd/app/..."); err != nil {
+	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-count=1", "-race", "-short", "./..."); err != nil {
 		return fmt.Errorf("failed to run fast tests: %w", err)
 	}
 	return nil
@@ -295,33 +302,53 @@ func runCheckSize() error {
 	defer fmt.Println("File sizes checked!")
 
 	kb := int64(1024)
-	if err := checkFileSizes("*.go", 20*kb, "Go files larger than 20k"); err != nil {
-		return err
+	extLimits := map[string]int64{
+		".go":  20 * kb,
+		".md":  10 * kb,
+		".mod": 10 * kb,
+		".sum": 10 * kb,
+		".yml": 10 * kb,
+	}
+	fileLimits := map[string]int64{
+		".gitignore": 1 * kb,
+		"Dockerfile": 10 * kb,
 	}
 
-	if err := checkFileSizes("*.md", 10*kb, "Markdown files larger than 10k"); err != nil {
-		return err
-	}
-
-	if err := checkFileSizes("*.json", 10*kb, "JSON files larger than 10k"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func checkFileSizes(pattern string, maxSize int64, errorMsg string) error {
-	matches, err := filepath.Glob(pattern)
+	cmd := exec.Command("git", "ls-files", "-z")
+	out, err := cmd.Output()
 	if err != nil {
-		return fmt.Errorf("failed to glob %s: %w", pattern, err)
+		return fmt.Errorf("failed to list files with git: %w", err)
 	}
 
-	for _, match := range matches {
-		info, err := os.Stat(match)
-		if err != nil {
+	entries := strings.Split(string(out), "\x00")
+	for _, path := range entries {
+		if path == "" {
 			continue
 		}
-		if info.Size() > maxSize {
-			return fmt.Errorf("ERROR: Found %s: %s (%d bytes)", errorMsg, match, info.Size())
+
+		base := filepath.Base(path)
+		if limit, ok := fileLimits[base]; ok {
+			info, statErr := os.Stat(path)
+			if statErr != nil {
+				return fmt.Errorf("size-check: os.Stat failed for file: %s", path)
+			}
+			if info.Size() > limit {
+				return fmt.Errorf("size-check: %s: %s (%d bytes)", base, path, info.Size())
+			}
+			continue
+		}
+
+		ext := strings.ToLower(filepath.Ext(base))
+		if limit, ok := extLimits[ext]; ok {
+			info, statErr := os.Stat(path)
+			if statErr != nil {
+				return fmt.Errorf("size-check: os.Stat failed for extension: %s %s", ext, path)
+			}
+			if info.Size() > limit {
+				return fmt.Errorf("size-check: %s: %s (%d bytes)", ext, path, info.Size())
+			}
+		} else {
+			return fmt.Errorf("size-check: format not supported: %s %s", ext, path)
 		}
 	}
 
