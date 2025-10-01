@@ -47,7 +47,7 @@ func run(args []string) error {
 
 	if !*setup && !*build && !*buildDocker && !*runDocker && !*test && !*testSlow && !*clean && !*cleanDocker {
 		flag.Usage()
-		return nil
+		return fmt.Errorf("no action specified")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
