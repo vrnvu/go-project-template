@@ -29,6 +29,9 @@ jobs:
       - name: Setup (deps, tools)
         run: go run cmd/ci/main.go -setup
 
+      - name: Check file sizes
+        run: go run cmd/ci/main.go -check-size
+
       - name: Run linter
         run: go run cmd/ci/main.go -lint
 
