@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  setup:
-    name: setup
+  lint:
+    name: lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -29,57 +29,12 @@ jobs:
       - name: Setup (deps, tools)
         run: go run cmd/ci/main.go -setup
 
-      - name: Archive Go toolchain and cache
-        run: |
-          mkdir -p .cache-bundle
-          touch .cache-bundle/.keep
-          echo "GOPATH=$(go env GOPATH)" > .cache-bundle/env
-          tar -czf .cache-bundle/go-cache.tgz -C $(go env GOPATH) pkg/mod || true
-          tar -czf .cache-bundle/go-build.tgz -C ~/.cache go-build || true
-          tar -czf .cache-bundle/gobin.tgz -C $(go env GOPATH)/bin . || true
-
-      - name: Upload setup artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: setup-cache
-          path: .cache-bundle
-
-  lint:
-    name: lint
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: go.sum
-
-      - name: Download setup artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: setup-cache
-          path: .cache-bundle
-
-      - name: Restore Go caches and tools
-        run: |
-          source .cache-bundle/env || true
-          tar -xzf .cache-bundle/go-cache.tgz -C ~/.cache || true
-          tar -xzf .cache-bundle/go-build.tgz -C ~/.cache || true
-          mkdir -p $(go env GOPATH)/bin
-          tar -xzf .cache-bundle/gobin.tgz -C $(go env GOPATH)/bin || true
-
       - name: Run linter
         run: go run cmd/ci/main.go -lint
 
   build:
     name: build
     runs-on: ubuntu-latest
-    needs: setup
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -91,19 +46,8 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Download setup artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: setup-cache
-          path: .cache-bundle
-
-      - name: Restore Go caches and tools
-        run: |
-          source .cache-bundle/env || true
-          tar -xzf .cache-bundle/go-cache.tgz -C ~/.cache || true
-          tar -xzf .cache-bundle/go-build.tgz -C ~/.cache || true
-          mkdir -p $(go env GOPATH)/bin
-          tar -xzf .cache-bundle/gobin.tgz -C $(go env GOPATH)/bin || true
+      - name: Setup (deps, tools)
+        run: go run cmd/ci/main.go -setup
 
       - name: Build app binary
         run: go run cmd/ci/main.go -build
@@ -125,7 +69,6 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    needs: setup
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -137,19 +80,8 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Download setup artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: setup-cache
-          path: .cache-bundle
-
-      - name: Restore Go caches and tools
-        run: |
-          source .cache-bundle/env || true
-          tar -xzf .cache-bundle/go-cache.tgz -C ~/.cache || true
-          tar -xzf .cache-bundle/go-build.tgz -C ~/.cache || true
-          mkdir -p $(go env GOPATH)/bin
-          tar -xzf .cache-bundle/gobin.tgz -C $(go env GOPATH)/bin || true
+      - name: Setup (deps, tools)
+        run: go run cmd/ci/main.go -setup
 
       - name: Run fast tests
         run: go run cmd/ci/main.go -test
