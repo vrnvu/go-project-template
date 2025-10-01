@@ -1,4 +1,4 @@
-module github.com/vrnvu/gdts
+module github.com/vrnvu/go-project-template
 
 go 1.23.4
 

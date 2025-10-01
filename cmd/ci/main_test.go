@@ -148,7 +148,7 @@ func checkCoverageThreshold(t *testing.T, output string) {
 	}
 
 	// Check for function-level coverage lines like:
-	// "github.com/vrnvu/gdts/cmd/ci/main.go:21:                        run             55.6%"
+	// "github.com/vrnvu/go-project-template/cmd/ci/main.go:21:                        run             55.6%"
 	// Pattern: file:line: tabs function tabs percentage%
 	functionRegex := regexp.MustCompile(`(\S+):\d+:\s+(\S+)\s+(\d+\.\d+)%`)
 	functionMatches := functionRegex.FindAllStringSubmatch(output, -1)
