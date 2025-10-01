@@ -93,7 +93,7 @@ func run(args []string) error {
 		}
 	}
 	if *checkSize {
-		if err := runCheckSize(); err != nil {
+		if err := runCheckSize(ctx); err != nil {
 			return fmt.Errorf("size check failed: %w", err)
 		}
 	}
@@ -157,7 +157,7 @@ func runSetup(ctx context.Context) error {
 		return fmt.Errorf("failed to verify modules: %w", err)
 	}
 
-	gopath, err := exec.Command("go", "env", "GOPATH").Output()
+	gopath, err := exec.CommandContext(ctx, "go", "env", "GOPATH").Output()
 	if err != nil {
 		return fmt.Errorf("failed to get GOPATH: %w", err)
 	}
@@ -294,7 +294,7 @@ func runLint(ctx context.Context) error {
 	fmt.Println("Running linter...")
 	defer fmt.Println("Linting complete!")
 
-	gopath, err := exec.Command("go", "env", "GOPATH").Output()
+	gopath, err := exec.CommandContext(ctx, "go", "env", "GOPATH").Output()
 	if err != nil {
 		return fmt.Errorf("failed to get GOPATH: %w", err)
 	}
@@ -303,7 +303,7 @@ func runLint(ctx context.Context) error {
 	return runCommand(ctx, lintPath, "run")
 }
 
-func runCheckSize() error {
+func runCheckSize(ctx context.Context) error {
 	fmt.Println("Checking file sizes...")
 	defer fmt.Println("File sizes checked!")
 
@@ -320,7 +320,7 @@ func runCheckSize() error {
 		"Dockerfile": 10 * kb,
 	}
 
-	cmd := exec.Command("git", "ls-files", "-z")
+	cmd := exec.CommandContext(ctx, "git", "ls-files", "-z")
 	out, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to list files with git: %w", err)
