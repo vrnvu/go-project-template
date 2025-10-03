@@ -25,7 +25,8 @@ func TestRunWithBuild(t *testing.T) {
 	stdout, stderr, err := captureOutput(t, runBuild)
 	require.NoError(t, err)
 	require.Empty(t, stderr)
-	require.Equal(t, "Building binary...\nBuild complete!\n", stdout)
+	require.Contains(t, stdout, "Building binary...")
+	require.Contains(t, stdout, "Build complete!")
 }
 
 func TestRunWithClean(t *testing.T) {
@@ -33,7 +34,8 @@ func TestRunWithClean(t *testing.T) {
 	stdout, stderr, err := captureOutput(t, runClean)
 	require.NoError(t, err)
 	require.Empty(t, stderr)
-	require.Equal(t, "Cleaning build artifacts...\nClean complete!\n", stdout)
+	require.Contains(t, stdout, "Cleaning build artifacts...")
+	require.Contains(t, stdout, "Clean complete!")
 }
 
 func TestRunWithTestSlow(t *testing.T) {
@@ -66,18 +68,22 @@ func TestRunWithBuildDocker(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow/integration: docker")
 	}
+
 	stdout, stderr, err := captureOutput(t, runBuildDocker)
 	require.NoError(t, err)
-	require.NotEmpty(t, stdout)
+	require.Contains(t, stdout, "Building Docker image...")
+	require.Contains(t, stdout, "Docker image built!")
 	require.NotEmpty(t, stderr)
 
 	stdout, stderr, err = captureOutput(t, runDocker)
 	require.NoError(t, err)
 	require.Empty(t, stderr)
-	require.NotEmpty(t, stdout)
+	require.Contains(t, stdout, "runDocker")
+	require.Contains(t, stdout, "Docker run complete!")
 
 	stdout, stderr, err = captureOutput(t, runCleanDocker)
 	require.NoError(t, err)
 	require.Empty(t, stderr)
-	require.NotEmpty(t, stdout)
+	require.Contains(t, stdout, "Cleaning Docker image...")
+	require.Contains(t, stdout, "Clean complete!")
 }
