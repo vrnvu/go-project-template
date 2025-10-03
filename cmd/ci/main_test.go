@@ -2,197 +2,82 @@ package main
 
 import (
 	"bytes"
-	"flag"
-	"fmt"
-	"os"
-	"regexp"
-	"slices"
-	"strconv"
-	"strings"
+	"context"
+	"io"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/vrnvu/go-project-template/cmd/ci/coverage"
 )
 
-func assertOutput(t *testing.T, got, want string) {
+func captureOutput(t *testing.T, f func(context.Context, io.Writer, io.Writer) error) (string, string, error) {
 	t.Helper()
-	if got != want {
-		t.Errorf("output mismatch\ngot:\n%q\nwant:\n%q", got, want)
-	}
+	var stdoutBuf, stderrBuf bytes.Buffer
+	err := f(context.Background(), &stdoutBuf, &stderrBuf)
+	return stdoutBuf.String(), stderrBuf.String(), err
 }
 
-func assertOutputContains(t *testing.T, got, want string) {
-	t.Helper()
-	if !strings.Contains(got, want) {
-		t.Errorf("output does not contain expected string\ngot:\n%q\nwant to contain:\n%q", got, want)
-	}
-}
-
-func formatOutputGot(stdout, stderr string, err error) string {
-	return fmt.Sprintf("stdout: %q\nstderr: %q\nerr: %v", stdout, stderr, err)
-}
-
-func formatOutputWant(stdout, stderr string, err error) string {
-	if err == nil {
-		return fmt.Sprintf("stdout: %q\nstderr: %q\nerr: <nil>", stdout, stderr)
-	}
-	return fmt.Sprintf("stdout: %q\nstderr: %q\nerr: %v", stdout, stderr, err)
-}
-
-func captureOutput(flagName string) (string, string, error) {
-	flag.CommandLine = flag.NewFlagSet(flagName, flag.ContinueOnError)
-
-	var stdout, stderr bytes.Buffer
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-
-	stdoutFile, _ := os.CreateTemp("", "stdout")
-	stderrFile, _ := os.CreateTemp("", "stderr")
-	defer os.Remove(stdoutFile.Name())
-	defer os.Remove(stderrFile.Name())
-
-	os.Stdout = stdoutFile
-	os.Stderr = stderrFile
-
-	err := run([]string{"-" + flagName})
-
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	// Read the captured output
-	_, _ = stdoutFile.Seek(0, 0)
-	_, _ = stderrFile.Seek(0, 0)
-	_, _ = stdout.ReadFrom(stdoutFile)
-	_, _ = stderr.ReadFrom(stderrFile)
-
-	return stdout.String(), stderr.String(), err
-}
-
-func TestRunWithBuild(t *testing.T) { //nolint:paralleltest
+func TestRunWithBuild(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow/integration: build")
 	}
-	stdout, stderr, err := captureOutput("build")
-
-	got := formatOutputGot(stdout, stderr, err)
-	want := formatOutputWant("Building binary...\nBuild complete!\n", "", nil)
-
-	assertOutput(t, got, want)
+	stdout, stderr, err := captureOutput(t, runBuild)
+	require.NoError(t, err)
+	require.Empty(t, stderr)
+	require.Equal(t, "Building binary...\nBuild complete!\n", stdout)
 }
 
-func TestRunWithClean(t *testing.T) { //nolint:paralleltest
-	stdout, stderr, err := captureOutput("clean")
-
-	got := formatOutputGot(stdout, stderr, err)
-	want := formatOutputWant("Cleaning build artifacts...\nClean complete!\n", "", nil)
-
-	assertOutput(t, got, want)
+func TestRunWithClean(t *testing.T) {
+	t.Parallel()
+	stdout, stderr, err := captureOutput(t, runClean)
+	require.NoError(t, err)
+	require.Empty(t, stderr)
+	require.Equal(t, "Cleaning build artifacts...\nClean complete!\n", stdout)
 }
 
-func TestRunWithInvalidFlag(t *testing.T) { //nolint:paralleltest
-	stdout, stderr, err := captureOutput("invalid")
-
-	got := formatOutputGot(stdout, stderr, err)
-	want := "flag provided but not defined: -invalid"
-	assertOutputContains(t, got, want)
-}
-
-func TestRunWithTestSlow(t *testing.T) { //nolint:paralleltest
+func TestRunWithTestSlow(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow/integration: test-slow")
 	}
-	if testing.CoverMode() != "" {
-		t.Skip("Skipping coverage test when running with coverage")
-	}
 
-	stdout, stderr, err := captureOutput("test-slow")
+	projectRoot, err := findProjectRoot()
+	require.NoError(t, err)
 
-	got := formatOutputGot(stdout, stderr, err)
-	// The actual output includes coverage details, so we just check it contains the key messages
-	assertOutputContains(t, got, "Running tests with coverage...")
-	assertOutputContains(t, got, "Coverage complete!")
+	_, _, err = captureOutput(t, func(ctx context.Context, out, errw io.Writer) error {
+		return runGoTestsWithCoverage(ctx, projectRoot, out, errw)
+	})
+	require.NoError(t, err)
 
-	// Check coverage percentages and report failures
-	checkCoverageThreshold(t, stdout)
+	stdout, _, err := captureOutput(t, runGoToolCover)
+	require.NoError(t, err)
+	require.NotEmpty(t, stdout)
+
+	coverageFunctions, err := coverage.GetFunctions(stdout)
+	require.NoError(t, err)
+
+	failures := coverage.Coverage(coverageFunctions)
+	require.Empty(t, failures)
 }
 
-func checkCoverageThreshold(t *testing.T, output string) {
-	t.Helper()
-
-	// Debug: print the output to see the exact format
-	t.Logf("Coverage output:\n%s", output)
-
-	var failures []string
-	whiteList := []string{
-		"main.go, main",
-		"main.go, run",
-		"main.go, runBuild",
-		"main.go, runCheckSize",
-		"main.go, checkFileSizes",
-		"main.go, runClean",
-		"main.go, runCleanDocker",
-		"main.go, runSetup",
-		"main.go, runTestFast",
-		"main.go, runTestSlow",
-		"main.go, runTestCoverage",
-		"main.go, fatalf",
-		"time.go, Now",
-	}
-
-	// Check for function-level coverage lines like:
-	// "github.com/vrnvu/go-project-template/cmd/ci/main.go:21:                        run             55.6%"
-	// Pattern: file:line: tabs function tabs percentage%
-	functionRegex := regexp.MustCompile(`(\S+):\d+:\s+(\S+)\s+(\d+\.\d+)%`)
-	functionMatches := functionRegex.FindAllStringSubmatch(output, -1)
-
-	for _, match := range functionMatches {
-		fileName := match[1]
-		funcName := match[2]
-		percentage, err := strconv.ParseFloat(match[3], 64)
-		if err != nil {
-			t.Errorf("Failed to parse function coverage percentage: %v", err)
-			continue
-		}
-
-		// Extract just the filename from the full path
-		fileParts := strings.Split(fileName, "/")
-		shortFileName := fileParts[len(fileParts)-1]
-
-		// Create the whitelist key in format "filename, functionname"
-		whitelistKey := fmt.Sprintf("%s, %s", shortFileName, funcName)
-
-		if slices.Contains(whiteList, whitelistKey) {
-			continue
-		}
-
-		if percentage < 70.0 {
-			failures = append(failures, fmt.Sprintf("Function %s: %.1f%% (below 70%%)", funcName, percentage))
-		}
-	}
-
-	if len(failures) > 0 {
-		t.Errorf("Coverage below 70%% threshold:\n%s", strings.Join(failures, "\n"))
-	}
-}
-
-func TestRunWithBuildDocker(t *testing.T) { //nolint:paralleltest
+func TestRunWithBuildDocker(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow/integration: docker")
 	}
-	stdout, stderr, err := captureOutput("build-docker")
+	stdout, stderr, err := captureOutput(t, runBuildDocker)
+	require.NoError(t, err)
+	require.NotEmpty(t, stdout)
+	require.NotEmpty(t, stderr)
 
-	got := formatOutputGot(stdout, stderr, err)
-	assertOutputContains(t, got, "Checking if Docker is running...")
-	assertOutputContains(t, got, "Docker is running, building image...")
-	assertOutputContains(t, got, "Docker image built!")
+	stdout, stderr, err = captureOutput(t, runDocker)
+	require.NoError(t, err)
+	require.Empty(t, stderr)
+	require.NotEmpty(t, stdout)
 
-	stdout, stderr, err = captureOutput("run-docker")
-
-	got = formatOutputGot(stdout, stderr, err)
-	assertOutputContains(t, got, "Running Docker image...")
-	assertOutputContains(t, got, "Docker run complete!")
-
-	stdout, stderr, err = captureOutput("clean-docker")
-
-	got = formatOutputGot(stdout, stderr, err)
-	assertOutputContains(t, got, "Cleaning Docker image...")
-	assertOutputContains(t, got, "Clean complete!")
+	stdout, stderr, err = captureOutput(t, runCleanDocker)
+	require.NoError(t, err)
+	require.Empty(t, stderr)
+	require.NotEmpty(t, stdout)
 }

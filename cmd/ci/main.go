@@ -1,114 +1,121 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/vrnvu/go-project-template/cmd/ci/coverage"
 )
 
-func main() {
-	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
+func exitWith(err error) {
+	fmt.Fprintf(os.Stderr, "%v\n", err)
+	os.Exit(1)
 }
 
-func run(args []string) error {
+func main() {
+	args := os.Args[1:]
 	var (
-		setup       = flag.Bool("setup", false, "Setup development environment")
-		build       = flag.Bool("build", false, "Build the binary")
-		buildDocker = flag.Bool("build-docker", false, "Build Docker image")
-		runDocker   = flag.Bool("run-docker", false, "Run Docker image")
-		test        = flag.Bool("test", false, "Run fast tests")
-		testSlow    = flag.Bool("test-slow", false, "Run all tests including slow ones with coverage")
-		clean       = flag.Bool("clean", false, "Clean build artifacts")
-		cleanDocker = flag.Bool("clean-docker", false, "Clean Docker image")
-		help        = flag.Bool("help", false, "Show help")
+		setup        = flag.Bool("setup", false, "Setup development environment")
+		build        = flag.Bool("build", false, "Build the binary")
+		buildDocker  = flag.Bool("build-docker", false, "Build Docker image")
+		runDocker    = flag.Bool("run-docker", false, "Run Docker image")
+		test         = flag.Bool("test", false, "Run fast tests")
+		testSlow     = flag.Bool("test-slow", false, "Run all tests including slow ones with coverage")
+		testCoverage = flag.Bool("test-coverage", false, "Check per-function coverage from coverage.out and enforce threshold")
+		clean        = flag.Bool("clean", false, "Clean build artifacts")
+		cleanDocker  = flag.Bool("clean-docker", false, "Clean Docker image")
+		help         = flag.Bool("help", false, "Show help")
 	)
 
 	if err := flag.CommandLine.Parse(args); err != nil {
-		return fmt.Errorf("failed to parse flags: %w", err)
+		exitWith(fmt.Errorf("failed to parse flags: %w", err))
 	}
 
 	if len(args) != 1 {
 		flag.Usage()
-		return fmt.Errorf("too many arguments: %v", args)
+		exitWith(fmt.Errorf("too many arguments: %v", args))
 	}
 
 	if *help {
 		flag.Usage()
-		return nil
+		return
 	}
 
-	if !*setup && !*build && !*buildDocker && !*runDocker && !*test && !*testSlow && !*clean && !*cleanDocker {
+	if !*setup && !*build && !*buildDocker && !*runDocker && !*test && !*testSlow && !*testCoverage && !*clean && !*cleanDocker {
 		flag.Usage()
-		return fmt.Errorf("no action specified")
+		exitWith(fmt.Errorf("no action specified"))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
 	if *setup {
-		if err := runSetup(ctx); err != nil {
-			return fmt.Errorf("setup failed: %w", err)
+		if err := runSetup(ctx, os.Stdout, os.Stderr); err != nil {
+			exitWith(fmt.Errorf("setup failed: %w", err))
 		}
 	}
 	if *build {
-		if err := runBuild(ctx); err != nil {
-			return fmt.Errorf("build failed: %w", err)
+		if err := runBuild(ctx, os.Stdout, os.Stderr); err != nil {
+			exitWith(fmt.Errorf("build failed: %w", err))
 		}
 	}
 	if *buildDocker {
-		if err := runBuildDocker(ctx); err != nil {
-			return fmt.Errorf("build-docker failed: %w", err)
+		if err := runBuildDocker(ctx, os.Stdout, os.Stderr); err != nil {
+			exitWith(fmt.Errorf("build-docker failed: %w", err))
 		}
 	}
 	if *runDocker {
-		if err := runRunDocker(ctx); err != nil {
-			return fmt.Errorf("run-docker failed: %w", err)
+		if err := runRunDocker(ctx, os.Stdout, os.Stderr); err != nil {
+			exitWith(fmt.Errorf("run-docker failed: %w", err))
 		}
 	}
 	if *test {
-		if err := runTestFast(ctx); err != nil {
-			return fmt.Errorf("fast tests failed: %w", err)
+		if err := runTestFast(ctx, os.Stdout, os.Stderr); err != nil {
+			exitWith(fmt.Errorf("fast tests failed: %w", err))
 		}
 	}
 	if *testSlow {
-		if err := runTestSlow(ctx); err != nil {
-			return fmt.Errorf("tests failed: %w", err)
+		if err := runTestSlow(ctx, os.Stdout, os.Stderr); err != nil {
+			exitWith(fmt.Errorf("tests failed: %w", err))
+		}
+	}
+	if *testCoverage {
+		if err := runCheckCoverage(ctx, os.Stdout, os.Stderr); err != nil {
+			exitWith(fmt.Errorf("test coverage failed: %w", err))
 		}
 	}
 	if *clean {
-		if err := runClean(ctx); err != nil {
-			return fmt.Errorf("clean failed: %w", err)
+		if err := runClean(ctx, os.Stdout, os.Stderr); err != nil {
+			exitWith(fmt.Errorf("clean failed: %w", err))
 		}
 	}
 	if *cleanDocker {
-		if err := runCleanDocker(ctx); err != nil {
-			return fmt.Errorf("clean-docker failed: %w", err)
+		if err := runCleanDocker(ctx, os.Stdout, os.Stderr); err != nil {
+			exitWith(fmt.Errorf("clean-docker failed: %w", err))
 		}
 	}
-
-	return nil
 }
 
-func runCommand(ctx context.Context, name string, args ...string) error {
+func runCommand(ctx context.Context, stdout, stderr io.Writer, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	return cmd.Run()
 }
 
-func runCommandInDir(ctx context.Context, dir, name string, args ...string) error {
+func runCommandInDir(ctx context.Context, dir string, stdout, stderr io.Writer, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	return cmd.Run()
 }
 
@@ -132,14 +139,14 @@ func findProjectRoot() (string, error) {
 	}
 }
 
-func runSetup(ctx context.Context) error {
-	fmt.Println("Setting up development environment...")
-	defer fmt.Println("Setup complete!")
+func runSetup(ctx context.Context, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "Setting up development environment...")
+	defer fmt.Fprintln(stdout, "Setup complete!")
 
-	if err := runCommand(ctx, "go", "mod", "download"); err != nil {
+	if err := runCommand(ctx, stdout, stderr, "go", "mod", "download"); err != nil {
 		return fmt.Errorf("failed to download modules: %w", err)
 	}
-	if err := runCommand(ctx, "go", "mod", "verify"); err != nil {
+	if err := runCommand(ctx, stdout, stderr, "go", "mod", "verify"); err != nil {
 		return fmt.Errorf("failed to verify modules: %w", err)
 	}
 
@@ -148,7 +155,7 @@ func runSetup(ctx context.Context) error {
 		return fmt.Errorf("failed to get GOPATH: %w", err)
 	}
 
-	if err := runCommand(ctx, "curl", "--version"); err != nil {
+	if err := runCommand(ctx, stdout, stderr, "curl", "--version"); err != nil {
 		return fmt.Errorf("curl is required but not available: %w", err)
 	}
 
@@ -156,26 +163,26 @@ func runSetup(ctx context.Context) error {
 	if _, err := os.Stat(gobin); os.IsNotExist(err) {
 		binDir := filepath.Dir(gobin)
 		script := "https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh"
-		if err := runCommand(ctx, "bash", "-lc", fmt.Sprintf("curl -sSfL %s | sh -s -- -b %s v2.5.0", script, binDir)); err != nil {
+		if err := runCommand(ctx, stdout, stderr, "bash", "-lc", fmt.Sprintf("curl -sSfL %s | sh -s -- -b %s v2.5.0", script, binDir)); err != nil {
 			return fmt.Errorf("failed to install golangci-lint via script: %w", err)
 		}
 	} else {
-		fmt.Println("golangci-lint already installed")
+		fmt.Fprintln(stdout, "golangci-lint already installed")
 	}
 
-	if err := runCommand(ctx, "git", "--version"); err != nil {
+	if err := runCommand(ctx, stdout, stderr, "git", "--version"); err != nil {
 		return fmt.Errorf("git is required but not available: %w", err)
 	}
-	if err := runCommand(ctx, "git", "rev-parse", "--is-inside-work-tree"); err != nil {
+	if err := runCommand(ctx, stdout, stderr, "git", "rev-parse", "--is-inside-work-tree"); err != nil {
 		return fmt.Errorf("not a git repository: %w", err)
 	}
 
 	return nil
 }
 
-func runBuild(ctx context.Context) error {
-	fmt.Println("Building binary...")
-	defer fmt.Println("Build complete!")
+func runBuild(ctx context.Context, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "Building binary...")
+	defer fmt.Fprintln(stdout, "Build complete!")
 
 	projectRoot, err := findProjectRoot()
 	if err != nil {
@@ -188,48 +195,48 @@ func runBuild(ctx context.Context) error {
 	}
 
 	outputPath := filepath.Join(binDir, "app")
-	if err := runCommandInDir(ctx, projectRoot, "go", "build", "-o", outputPath, "./cmd/app"); err != nil {
+	if err := runCommandInDir(ctx, projectRoot, stdout, stderr, "go", "build", "-o", outputPath, "./cmd/app"); err != nil {
 		return fmt.Errorf("failed to build: %w", err)
 	}
 
 	return nil
 }
 
-func runBuildDocker(ctx context.Context) error {
-	fmt.Println("Checking if Docker is running...")
-	if err := runCommand(ctx, "docker", "ps"); err != nil {
+func runBuildDocker(ctx context.Context, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "Checking if Docker is running...")
+	if err := runCommand(ctx, stdout, stderr, "docker", "ps"); err != nil {
 		return fmt.Errorf("docker is not running or not accessible: %w", err)
 	}
 
-	fmt.Println("Docker is running, building image...")
-	defer fmt.Println("Docker image built!")
+	fmt.Fprintln(stdout, "Docker is running, building image...")
+	defer fmt.Fprintln(stdout, "Docker image built!")
 
 	projectRoot, err := findProjectRoot()
 	if err != nil {
 		return fmt.Errorf("failed to find project root: %w", err)
 	}
 
-	if err := runCommandInDir(ctx, projectRoot, "docker", "build", "--platform", "linux/amd64", "-t", "app:latest", "."); err != nil {
+	if err := runCommandInDir(ctx, projectRoot, stdout, stderr, "docker", "build", "--platform", "linux/amd64", "-t", "app:latest", "."); err != nil {
 		return fmt.Errorf("failed to build Docker image: %w", err)
 	}
 
 	return nil
 }
 
-func runRunDocker(ctx context.Context) error {
-	fmt.Println("Running Docker image...")
-	defer fmt.Println("Docker run complete!")
+func runRunDocker(ctx context.Context, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "Running Docker image...")
+	defer fmt.Fprintln(stdout, "Docker run complete!")
 
-	if err := runCommand(ctx, "docker", "run", "--rm", "app:latest"); err != nil {
+	if err := runCommand(ctx, stdout, stderr, "docker", "run", "--rm", "app:latest"); err != nil {
 		return fmt.Errorf("failed to run Docker image: %w", err)
 	}
 
 	return nil
 }
 
-func runTestFast(ctx context.Context) error {
-	fmt.Println("Running fast tests...")
-	defer fmt.Println("Fast tests complete!")
+func runTestFast(ctx context.Context, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "Running fast tests...")
+	defer fmt.Fprintln(stdout, "Fast tests complete!")
 
 	// Change to project root directory
 	projectRoot, err := findProjectRoot()
@@ -237,7 +244,7 @@ func runTestFast(ctx context.Context) error {
 		return fmt.Errorf("failed to find project root: %w", err)
 	}
 
-	if err := runLint(ctx); err != nil {
+	if err := runLint(ctx, stdout, stderr); err != nil {
 		return fmt.Errorf("linting failed: %w", err)
 	}
 
@@ -245,23 +252,23 @@ func runTestFast(ctx context.Context) error {
 		return fmt.Errorf("size check failed: %w", err)
 	}
 
-	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-count=1", "-race", "-short", "./..."); err != nil {
+	if err := runCommandInDir(ctx, projectRoot, stdout, stderr, "go", "test", "-count=1", "-race", "-short", "./..."); err != nil {
 		return fmt.Errorf("failed to run fast tests: %w", err)
 	}
 
 	return nil
 }
 
-func runTestSlow(ctx context.Context) error {
-	fmt.Println("Running all tests...")
-	defer fmt.Println("All tests complete!")
+func runTestSlow(ctx context.Context, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "Running all tests...")
+	defer fmt.Fprintln(stdout, "All tests complete!")
 
 	projectRoot, err := findProjectRoot()
 	if err != nil {
 		return fmt.Errorf("failed to find project root: %w", err)
 	}
 
-	if err := runLint(ctx); err != nil {
+	if err := runLint(ctx, stdout, stderr); err != nil {
 		return fmt.Errorf("linting failed: %w", err)
 	}
 
@@ -269,26 +276,27 @@ func runTestSlow(ctx context.Context) error {
 		return fmt.Errorf("size check failed: %w", err)
 	}
 
-	if err := runDocker(ctx); err != nil {
+	if err := runDocker(ctx, stdout, stderr); err != nil {
 		return fmt.Errorf("docker failed: %w", err)
 	}
 
-	fmt.Println("Running tests with coverage...")
-	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-count=1", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./..."); err != nil {
+	fmt.Fprintln(stdout, "Running tests with coverage...")
+	if err := runGoTestsWithCoverage(ctx, projectRoot, stdout, stderr); err != nil {
 		return fmt.Errorf("failed to run coverage tests: %w", err)
 	}
 
-	if err := runCommandInDir(ctx, projectRoot, "go", "tool", "cover", "-func=coverage.out"); err != nil {
-		return fmt.Errorf("failed to show coverage: %w", err)
+	// Run only the coverage validation test in cmd/ci (no coverage flags)
+	if err := runCommandInDir(ctx, projectRoot, stdout, stderr, "go", "test", "-count=1", "-race", "./cmd/ci", "-run", "TestRunWithTestSlow"); err != nil {
+		return fmt.Errorf("coverage validation failed: %w", err)
 	}
-	fmt.Println("Coverage complete!")
+	fmt.Fprintln(stdout, "Coverage complete!")
 
 	return nil
 }
 
-func runLint(ctx context.Context) error {
-	fmt.Println("Running linter...")
-	defer fmt.Println("Linting complete!")
+func runLint(ctx context.Context, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "Running linter...")
+	defer fmt.Fprintln(stdout, "Linting complete!")
 
 	gopath, err := exec.CommandContext(ctx, "go", "env", "GOPATH").Output()
 	if err != nil {
@@ -296,12 +304,12 @@ func runLint(ctx context.Context) error {
 	}
 
 	lintPath := filepath.Join(strings.TrimSpace(string(gopath)), "bin", "golangci-lint")
-	return runCommand(ctx, lintPath, "run")
+	return runCommand(ctx, stdout, stderr, lintPath, "run")
 }
 
 func runCheckSize(ctx context.Context) error {
-	fmt.Println("Checking file sizes...")
-	defer fmt.Println("File sizes checked!")
+	fmt.Fprintln(os.Stdout, "Checking file sizes...")
+	defer fmt.Fprintln(os.Stdout, "File sizes checked!")
 
 	kb := int64(1024)
 	extLimits := map[string]int64{
@@ -316,13 +324,16 @@ func runCheckSize(ctx context.Context) error {
 		"Dockerfile": 10 * kb,
 	}
 
+	var out bytes.Buffer
 	cmd := exec.CommandContext(ctx, "git", "ls-files", "-z")
-	out, err := cmd.Output()
+	cmd.Stdout = &out
+	cmd.Stderr = io.Discard
+	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("failed to list files with git: %w", err)
 	}
 
-	entries := strings.Split(string(out), "\x00")
+	entries := strings.Split(out.String(), "\x00")
 	for _, path := range entries {
 		if path == "" {
 			continue
@@ -355,15 +366,15 @@ func runCheckSize(ctx context.Context) error {
 	return nil
 }
 
-func runClean(ctx context.Context) error {
-	fmt.Println("Cleaning build artifacts...")
-	defer fmt.Println("Clean complete!")
+func runClean(ctx context.Context, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "Cleaning build artifacts...")
+	defer fmt.Fprintln(stdout, "Clean complete!")
 
 	if err := os.RemoveAll("bin"); err != nil {
 		return fmt.Errorf("failed to remove bin directory: %w", err)
 	}
 
-	if err := runCommand(ctx, "go", "clean"); err != nil {
+	if err := runCommand(ctx, stdout, stderr, "go", "clean"); err != nil {
 		return fmt.Errorf("failed to clean Go cache: %w", err)
 	}
 
@@ -373,9 +384,9 @@ func runClean(ctx context.Context) error {
 	return nil
 }
 
-func runCleanDocker(ctx context.Context) error {
-	fmt.Println("Cleaning Docker image...")
-	defer fmt.Println("Clean complete!")
+func runCleanDocker(ctx context.Context, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "Cleaning Docker image...")
+	defer fmt.Fprintln(stdout, "Clean complete!")
 
 	cmd := exec.CommandContext(ctx, "docker", "ps", "-aq", "--filter", "ancestor=app")
 	output, err := cmd.Output()
@@ -395,7 +406,7 @@ func runCleanDocker(ctx context.Context) error {
 			}
 		}
 
-		if err := runCommand(ctx, "docker", "rmi", "app"); err != nil {
+		if err := runCommand(ctx, stdout, stderr, "docker", "rmi", "app"); err != nil {
 			return fmt.Errorf("failed to remove Docker image: %w", err)
 		}
 	}
@@ -403,16 +414,91 @@ func runCleanDocker(ctx context.Context) error {
 	return nil
 }
 
-func runDocker(ctx context.Context) error {
-	if err := runCommand(ctx, "docker", "ps"); err == nil {
+func runDocker(ctx context.Context, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "runDocker")
+	defer fmt.Fprintln(stdout, "Docker run complete!")
+	if err := runCommand(ctx, stdout, stderr, "docker", "ps"); err == nil {
 		return nil
 	}
 
-	if err := runCommand(ctx, "open", "-a", "Docker"); err != nil {
+	if err := runCommand(ctx, stdout, stderr, "open", "-a", "Docker"); err != nil {
 		return fmt.Errorf("failed to launch Docker Desktop: %w", err)
 	}
 
 	time.Sleep(5 * time.Second)
 
+	if err := runCommand(ctx, stdout, stderr, "docker", "ps"); err != nil {
+		return fmt.Errorf("failed docker ps")
+	}
+
+	return nil
+}
+
+func runGoTestsWithCoverage(ctx context.Context, projectRoot string, stdout, stderr io.Writer) error {
+	// List packages and exclude cmd/ci to avoid recursion and timing issues
+	var listOut bytes.Buffer
+	if err := runCommandInDir(ctx, projectRoot, &listOut, stderr, "go", "list", "./..."); err != nil {
+		return err
+	}
+	pkgs := make([]string, 0, 16)
+	for _, p := range strings.Fields(listOut.String()) {
+		if strings.HasSuffix(p, "/cmd/ci") {
+			continue
+		}
+		pkgs = append(pkgs, p)
+	}
+	if len(pkgs) == 0 {
+		return nil
+	}
+
+	args := append([]string{"test", "-count=1", "-race", "-covermode=atomic", "-coverprofile=coverage.out"}, pkgs...)
+	return runCommandInDir(ctx, projectRoot, stdout, stderr, "go", args...)
+}
+
+func runGoToolCover(ctx context.Context, stdout, stderr io.Writer) error {
+	projectRoot, err := findProjectRoot()
+	if err != nil {
+		return err
+	}
+
+	if err := runCommandInDir(ctx, projectRoot, stdout, stderr, "go", "tool", "cover", "-func=coverage.out"); err != nil {
+		return err
+	}
+	return nil
+}
+
+// runCheckCoverage reads coverage.out via `go tool cover -func`, enforces a threshold with a whitelist.
+func runCheckCoverage(ctx context.Context, stdout, stderr io.Writer) error {
+	projectRoot, err := findProjectRoot()
+	if err != nil {
+		return err
+	}
+
+	var buf bytes.Buffer
+	if err := runCommandInDir(ctx, projectRoot, &buf, stderr, "go", "tool", "cover", "-func=coverage.out"); err != nil {
+		return fmt.Errorf("failed to show coverage: %w", err)
+	}
+
+	// Echo the coverage summary to stdout for visibility and to satisfy linters
+	_, _ = fmt.Fprint(stdout, buf.String())
+
+	functions, err := coverage.GetFunctions(buf.String())
+	if err != nil {
+		return err
+	}
+
+	const threshold = 70.0
+	var failures []string
+	for _, fn := range functions {
+		if wl, ok := coverage.WhiteList[fn.FileName]; ok && wl == fn.FuncName {
+			continue
+		}
+		if fn.Percentage < threshold {
+			failures = append(failures, fmt.Sprintf("%s %s %.1f%% < %.1f%%", fn.FileName, fn.FuncName, fn.Percentage, threshold))
+		}
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("coverage below threshold:\n%s", strings.Join(failures, "\n"))
+	}
 	return nil
 }
