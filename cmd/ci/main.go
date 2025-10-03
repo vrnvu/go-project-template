@@ -269,6 +269,10 @@ func runTestSlow(ctx context.Context) error {
 		return fmt.Errorf("size check failed: %w", err)
 	}
 
+	if err := runDocker(ctx); err != nil {
+		return fmt.Errorf("docker failed: %w", err)
+	}
+
 	fmt.Println("Running tests with coverage...")
 	if err := runCommandInDir(ctx, projectRoot, "go", "test", "-count=1", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./..."); err != nil {
 		return fmt.Errorf("failed to run coverage tests: %w", err)
@@ -395,6 +399,20 @@ func runCleanDocker(ctx context.Context) error {
 			return fmt.Errorf("failed to remove Docker image: %w", err)
 		}
 	}
+
+	return nil
+}
+
+func runDocker(ctx context.Context) error {
+	if err := runCommand(ctx, "docker", "ps"); err == nil {
+		return nil
+	}
+
+	if err := runCommand(ctx, "open", "-a", "Docker"); err != nil {
+		return fmt.Errorf("failed to launch Docker Desktop: %w", err)
+	}
+
+	time.Sleep(5 * time.Second)
 
 	return nil
 }
